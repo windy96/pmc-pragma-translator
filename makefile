@@ -8,14 +8,14 @@
 ## ROSE installation contains
 ##   * libraries, e.g. "librose.la"
 ##   * headers, e.g. "rose.h"
-ROSE_INSTALL=/home/demo/opt/rose-inst
+ROSE_INSTALL=/home/kim77/local/development/rose/edg4/install4
 
 ## ROSE uses the BOOST C++ libraries
-BOOST_INSTALL=/home/demo/opt/boost-1.40.0
+BOOST_INSTALL=/home/kim77/local/development/1_45_0
 
 ## Your translator
 TRANSLATOR=pmcTranslator
-TRANSLATOR_SOURCE=$(TRANSLATOR).cpp pmcSupport.cpp
+TRANSLATOR_SOURCE=$(TRANSLATOR).cpp pmcSupport.cpp pmcSupport.h
 
 ## Input testcode for your translator
 TESTCODE=matrixTranspose.c
@@ -33,7 +33,7 @@ $(TRANSLATOR): $(TRANSLATOR_SOURCE)
 
 # test the translator
 check: $(TRANSLATOR)
-	./$(TRANSLATOR) -c -I. -I$(ROSE_INSTALL)/include $(TESTCODE) 
+	./$(TRANSLATOR) -c -I. -I$(ROSE_INSTALL)/include $(TESTCODE)
 
 clean:
 	rm -rf $(TRANSLATOR) *.o rose_* *.dot
