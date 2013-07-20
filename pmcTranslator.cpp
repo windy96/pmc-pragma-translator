@@ -1,66 +1,35 @@
 // Pragma Translator for Programmer Managed Cache
 // Written by Wooil Kim
-// Last updated at Jun 20, 2013
+// Last updated on Jul 19, 2013
 
-#include <rose.h>
-#include "DefUseAnalysis.h"
+#include "rose.h"
 #include <string>
 #include <iostream>
 #include "pmcSupport.h"
+//#include "DefUseAnalysis.h"
 
 
 using namespace std;
-using namespace PMCSupport;
 using namespace SageInterface;
 using namespace SageBuilder;
 using namespace AstFromString;
+using namespace PMCSupport;
 
 
 int main(int argc, char *argv[])
 {
-	// Build the AST used by ROSE
+	// Build the AST
 	SgProject *project = frontend(argc, argv);
 
-	// Step 1. Query 
-	// [TODO] separate this routine to a function
-	Rose_STL_Container<SgNode *> pragmaDeclarationList = NodeQuery::querySubTree(project, V_SgPragmaDeclaration);
-	Rose_STL_Container<SgNode *>::iterator pragmaIt;
+	// Step 1. Read PMC pragmas, and convert to AST attributes
+	convertPMCPragmasToAttributes(project);
 
-	for (pragmaIt = pragmaDeclarationList.begin(); pragmaIt != pragmaDeclarationList.end(); ++pragmaIt)
-	{
-		SgPragmaDeclaration *pDecl;
-		pDecl = isSgPragmaDeclaration(*pragmaIt);
-		string	key = extractPragmaKeyword(pDecl);
-		if ((key != "pmc") && (key != "PMC"))
-			continue;
+	// Step 2. Check AST attributes for debugging
+	CheckerTraversal pmcParser;
+	pmcParser.traverseInputFiles(project, preorder);
 
-		string	content = pDecl->get_pragma()->get_pragma();
-		content = content.substr(4, content.size() - 4);
-		cout << "pragma is recognized: " << content << endl;
-
-		SgStatement *pragmaStmt = getEnclosingStatement(pDecl);
-		SgStatement *stmt;
-		stmt = getNextStatement(pragmaStmt);
-		ROSE_ASSERT(stmt);
-		while (isSgPragmaDeclaration(stmt)) {
-			stmt = getNextStatement(stmt);
-			ROSE_ASSERT(stmt);
-		}
-
-		cout << "    applied to: " << stmt->unparseToString() << endl;
-		PMCPragmaAttribute *pAttribute = parsePMCPragma(pDecl);	
-//		if (stmt->attributeExists("PMCAttribute"
-		stmt->addNewAttribute("PMCAttribute", pAttribute);
-		cout << "    attribute " << pAttribute->toString() << " is added." << endl << endl;
-	}
-
-
-
-	// 2. 
-
-  // Parse PMC pragmas
-  //ParsingTraversal pmcParser;
-  //pmcParser.traverseInputFiles(project, preorder);
+	// Step 3.
+	applyPMCAttributesToStatements(project);
 
 /*
   ParsingPMCTraversal pmcParser;
@@ -81,10 +50,11 @@ int main(int argc, char *argv[])
   }
   */
 
-  // Test for consistency
-  AstTests::runAllTests(project);
+	// Test for consistency
+	AstTests::runAllTests(project);
 
-  // Invoke a backend compiler
-  return backend(project);
+	// Invoke a backend compiler
+	//return backend(project);
+	return 0;
 }
 

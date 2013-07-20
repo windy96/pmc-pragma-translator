@@ -12,6 +12,17 @@ int foo(int a, int b)
 	return c;
 }
 
+#pragma pmc shared a, b
+int bar(int a, int b)
+{
+	int c;
+	c = a + b;
+	return c;
+}
+
+
+
+
 int main()
 {
 	int local1, local2, local3, local4;
@@ -30,7 +41,7 @@ int main()
 	//*pGlobal = 2;
 
 	int i;
-	#pragma pmc shared globalArray
+	#pragma pmc shared (globalArray)
 	for (i = 0; i < 50; i++)
 		globalArray[i] = i;
 

@@ -2,114 +2,131 @@
 // Written by Wooil Kim
 // Last updated at Jul 1, 2013
 
-#include <rose.h>
+#include "rose.h"
 #include "pmcSupport.h"
+#include <boost/tokenizer.hpp>
+#include <boost/algorithm/string.hpp>
 
 using namespace SageInterface;
 using namespace SageBuilder;
 using namespace AstFromString;	// for parser
+using namespace boost;
 
 
 namespace PMCSupport
 {
 
-  std::string PMCPragmaAttribute::toString()
-  {
-    std::string result;
+	string PMCPragmaEnumString[] = {
+		"none",
+		"shared",
+		"first sharing",
+		"last sharing",
+		"thread local live in",
+		"thread local live out",
+		"write dense",
+		"write first",
+		"write once",
+		"unknown",
+		"out of bound"
+	};
 
-	vector<PMCPragmaInfo>::iterator		pmcVecIt;
- 
-	for (pmcVecIt = pmcVec.begin(); pmcVecIt != pmcVec.end(); ++pmcVecIt)
+
+	string PMCPragmaInfo::toString()
 	{
-		
-    switch ((*pmcVecIt)->pmcCmd)
-    {
-       case PMC_SHARED:       result += "shared";  
-         result += " for " + content; break;
-       case PMC_FIRST_SHARING:   result += "first sharing";  break;
-       case PMC_LAST_SHARING: result += "last sharing";  break;
-       case PMC_DATAFLOW_IN:  result += "dataflow in";  break;
-       case PMC_DATAFLOW_OUT: result += "dataflow out";  break;
-       case PMC_WRITE_DENSE:  result += "write dense";  break;
-       case PMC_WRITE_FIRST:  result += "write first";  break;
-       case PMC_WRITE_ONCE:   result += "write once";  break;
-       default:  break;
-     }
-	result += endl;
+		string result;
+		result = PMCPragmaEnumString[pmcCmd] + " for " + content;
+		return result;
 	}
 
-     return result;
-  }
+
+	string PMCPragmaAttribute::toString()
+	{
+		string result;
+		vector<PMCPragmaInfo>::iterator		pragmaVecIt;
+ 
+		for (pragmaVecIt = pragmaVec.begin(); pragmaVecIt != pragmaVec.end(); ++pragmaVecIt)
+		{
+			if (pragmaVecIt != pragmaVec.begin())
+				result += ", ";
+			result += pragmaVecIt->toString();		
+		}
+
+		return result;
+	}
 
 
-  void ParsingTraversal::parseTriplet(PMCPragmaAttribute *attr)
-  {
-//    if (afs_match_char(
+	PMCPragmaAttribute& PMCPragmaAttribute::operator+=(PMCPragmaAttribute &rhs) 
+	{
+		vector<PMCPragmaInfo>::iterator		it;
 
-  }
+		for (it = rhs.pragmaVec.begin(); it != rhs.pragmaVec.end(); ++it)
+			pragmaVec.push_back(*it);
+	}
 
 
-  void ParsingTraversal::visit(SgNode* node)
-  {
-    if (node->variantT() != V_SgPragmaDeclaration)
-       return;
+	void CheckerTraversal::visit(SgNode* node)
+	{
 
-    SgPragmaDeclaration* pDecl = isSgPragmaDeclaration(node);
-    ROSE_ASSERT(pDecl != NULL);
-    string key = extractPragmaKeyword(pDecl);
-    if ((key != "pmc") && (key != "PMC"))
-      return;
-    // Now we have a PMC pragma declaration.
+		if (node->attributeExists("PMCAttribute")) {
+			PMCPragmaAttribute *p = dynamic_cast<PMCPragmaAttribute *> (node->getAttribute("PMCAttribute"));
+			vector<PMCPragmaInfo>::iterator	it;
 
-    
-    string content = pDecl->get_pragma()->get_pragma();
-    content = content.substr(4, content.size() - 4);
-    cout << "pragma is recognized: " << content << endl;
-    
-    PMCPragmaAttribute *pAttribute = parsePMCPragma(pDecl);
-    node->addNewAttribute("PMCAttribute", pAttribute);
-    ROSE_ASSERT(pAttribute);
-    cout << pAttribute->toString() << endl;
+			cout << "Node '" << node->unparseToString() << "' has pmc attributes." << endl;
+			for (it = p->pragmaVec.begin(); it != p->pragmaVec.end(); ++it)
+			{
+				if (it != p->pragmaVec.begin())
+					cout << ", ";
+				else
+					cout << "\t";
+				cout << it->toString();
+			}
+			cout << endl << endl;
+		}
+
+	}
+
+	void PropagateTraversal::visit(SgNode* node)
+	{
+
+		if (node->attributeExists("PMCAttribute")) {
+			PMCPragmaAttribute *p = dynamic_cast<PMCPragmaAttribute *> (node->getAttribute("PMCAttribute"));
+			vector<PMCPragmaInfo>::iterator	it;
+
+			cout << "Node '" << node->unparseToString() << "' has pmc attributes." << endl;
+			cout << node->class_name() << endl;
+			
+			SgStatement	*st, *nst;
+			SgFunctionDeclaration *func;
+			SgBasicBlock *func_body;
+			switch (node->variantT()) {
+			case V_SgFunctionDeclaration:
+				//st = getEnclosingStatement(node);
+				//cout << "enclosing: " << st->unparseToString() << endl;
+				//nst = getNextStatement(st);
+				//cout << "next: " << nst->unparseToString() << endl;
+				func = isSgFunctionDeclaration(node);
+				func_body = func->get_definition()->get_body();
+				cout << "func body: " << func_body->unparseToString() << endl;
+				break;
+
+			case V_SgForStatement:
+				st = getEnclosingStatement(node);
+				//cout << "enclosing: " << st->unparseToString() << endl;
+				nst = getNextStatement(st);
+				cout << "next: " << nst->unparseToString() << endl;
+				break;
+
+			default:
+				cout << "not identified" << endl;
+				break;	
+
+			}
+		}
+
+	}
+
 
 /*
-    printf("checkpoint 1\n");
-    AstAttribute *pAttribute = parsePMCPragma(pDecl);
-    printf("checkpoint 2\n");
-    //node->addNewAttribute("PMCAttribute", pAttribute);
-    printf("checkpoint 3\n");
-    PMCPragmaAttribute *pPMCAttribute = dynamic_cast<PMCPragmaAttribute *> (pAttribute);
-    printf("checkpoint 4\n");
-    cout << pAttribute->toString() << endl;
-    printf("checkpoint 5\n");
-*/
-
-/*
-    if (afs_match_substr("write_dense")) {
-      cout << "write_dense is detected." << endl;
-      pAttribute = new PMCPragmaAttribute(node, PMC_WR_DENSE);
-      parseTriplet(pAttribute);
-    }
-    else if (afs_match_substr("write_first")) {
-      cout << "write_first is detected." << endl;
-      pAttribute = new PMCPragmaAttribute(node, PMC_WR_FIRST);
-      parseTriplet(pAttribute);
-    }
-    else if (afs_match_substr("write_once")) {
-      cout << "write_once is detected." << endl;
-      pAttribute = new PMCPragmaAttribute(node, PMC_WR_ONCE);
-      parseTriplet(pAttribute);
-    }
-    else {
-      cerr << "Error: Unrecognizable PMC pragma: " << content << "." << endl;
-      ROSE_ASSERT(false);
-    }
- */
-//    node->addNewAttribute("PMCAttribute", pAttribute);
-
-  }
-
-
-
   void ParsingPMCTraversal::preOrderVisit(SgNode* node)
   {
     if (node->variantT() == V_SgPragmaDeclaration) {
@@ -171,7 +188,7 @@ namespace PMCSupport
 
       for (pairIt = currentPMCPragmas.begin(); pairIt != currentPMCPragmas.end(); pairIt++)
       {
-        if ((*pairIt)->pragma->pragmaType == PMC_SHARED) {
+        if ((*pairIt)->pragma->pmcCmd == PMC_SHARED) {
           if (pVar->unparseToString() == (*pairIt)->pragma->content) {
             cout << "*** found " << pVar->unparseToString() << endl;
             cout << currentPMCPragmas.size() << " pragmas applied" << endl;
@@ -180,11 +197,11 @@ namespace PMCSupport
             break;
           }
           else {
-            /*
+            // / *
             cout << "difference found" << endl;
             cout << pVar->unparseToString() << endl;
             cout << (*pairIt)->pragma->content << endl;
-            */
+            // * /
           }
         }
       }
@@ -226,7 +243,7 @@ namespace PMCSupport
       //cout << "post variable " << pVar->unparseToString() << endl;
       //cout << currentPMCPragmas.size() << endl;
     //else if (node->variantT() == 698) {
-     /*
+     // / *
       SgVarRefExp *pVar = isSgVarRefExp(node);
       cout << "variable " << pVar->unparseToString() << endl;
       cout << currentPMCPragmas.size() << endl;
@@ -244,88 +261,141 @@ namespace PMCSupport
           }
         }
       }
-     */
+     // * /
     }
   }
 
-
-
-
-  PMCPragmaAttribute* parsePMCPragma(SgPragmaDeclaration* pPragmaDecl)
-  {
-    PMCPragmaAttribute *result = NULL;
-    ROSE_ASSERT(pPragmaDecl);
-    ROSE_ASSERT(pPragmaDecl->get_pragma());
-
-    string pragmaContent = pPragmaDecl->get_pragma()->get_pragma();
-    pragmaContent = pragmaContent.substr(4, pragmaContent.size() - 4);
-
-    //c_sgnode = getNextStatement(pPragmaDecl);
-    c_sgnode = getEnclosingStatement(pPragmaDecl);
-    c_char = pragmaContent.c_str();
-
-    //cout << "parsing" << endl;
-    //cout << c_sgnode->unparseToString() << endl;
-    string content;
-    if (afs_match_substr("shared")) {
-      content = pragmaContent.substr(7, pragmaContent.size() - 7, content);
-      result = new PMCPragmaAttribute(c_sgnode, PMC_SHARED);
-    }
-    else if (afs_match_substr("first_sharing")) {
-      content = pragmaContent.substr(14, pragmaContent.size() - 14, content);
-      result = new PMCPragmaAttribute(c_sgnode, PMC_FIRST_SHARING);
-    }
-    else if (afs_match_substr("last_sharing")) {
-      content = pragmaContent.substr(13, pragmaContent.size() - 13, content);
-      result = new PMCPragmaAttribute(c_sgnode, PMC_LAST_SHARING);
-    }
-    else if (afs_match_substr("from_the_same_thread")) {
-      content = pragmaContent.substr(21, pragmaContent.size() - 21, content);
-      result = new PMCPragmaAttribute(c_sgnode, PMC_DATAFLOW_IN);
-    }
-    else if (afs_match_substr("to_the_same_thread")) {
-      content = pragmaContent.substr(19, pragmaContent.size() - 19, content);
-      result = new PMCPragmaAttribute(c_sgnode, PMC_DATAFLOW_OUT);
-    }
-    else if (afs_match_substr("write_dense")) {
-      content = pragmaContent.substr(12, pragmaContent.size() - 12, content);
-      result = new PMCPragmaAttribute(c_sgnode, PMC_WRITE_DENSE);
-    }
-    else if (afs_match_substr("write_first")) {
-      content = pragmaContent.substr(12, pragmaContent.size() - 12, content);
-      result = new PMCPragmaAttribute(c_sgnode, PMC_WRITE_FIRST);
-    }
-    else if (afs_match_substr("write_once")) {
-      content = pragmaContent.substr(11, pragmaContent.size() - 11, content);
-      result = new PMCPragmaAttribute(c_sgnode, PMC_WRITE_ONCE);
-    }
-    else {
-      cerr << "error in recognizing PMC pragma" << endl;
-    }
-
-    ROSE_ASSERT(result);
-    
-/*
-
-  if (afs_match_substr("write_dense")) {
-      cout << "write_dense is detected." << endl;
-      pAttribute = new PMCPragmaAttribute(node, PMC_WR_DENSE);
-      parseTriplet(pAttribute);
-    }
-    else if (afs_match_substr("write_first")) {
-      cout << "write_first is detected." << endl;
-      pAttribute = new PMCPragmaAttribute(node, PMC_WR_FIRST);
-      parseTriplet(pAttribute);
-    }
-    else if (afs_match_substr("write_once")) {
-      cout << "write_once is detected." << endl;
-      pAttribute = new PMCPragmaAttribute(node, PMC_WR_ONCE);
-      parseTriplet(pAttribute);
-
-  }
 */
-    return result;
-  }
 
+
+
+
+	void convertPMCPragmasToAttributes(SgProject *proj)
+	{
+		Rose_STL_Container<SgNode *> pragmaDeclarationList = NodeQuery::querySubTree(proj, V_SgPragmaDeclaration);
+		Rose_STL_Container<SgNode *>::iterator pragmaIt;
+
+		for (pragmaIt = pragmaDeclarationList.begin(); pragmaIt != pragmaDeclarationList.end(); ++pragmaIt)
+		{
+			SgPragmaDeclaration *pDecl;
+			pDecl = isSgPragmaDeclaration(*pragmaIt);
+			string	key = extractPragmaKeyword(pDecl);
+			if (boost::iequals(key, "pmc")) {
+
+				string	content = pDecl->get_pragma()->get_pragma();
+				content = content.substr(4, content.size() - 4);
+				cout << "pragma is recognized: " << content << endl;
+
+				SgStatement *pragmaStmt = getEnclosingStatement(pDecl);
+				SgStatement *stmt;
+				stmt = getNextStatement(pragmaStmt);
+				ROSE_ASSERT(stmt);
+				while (isSgPragmaDeclaration(stmt)) {
+					// skip other pragma declarations
+					stmt = getNextStatement(stmt);
+					ROSE_ASSERT(stmt);
+				}
+
+				cout << "\tapplied to: " << stmt->unparseToString() << endl;
+				PMCPragmaAttribute attributeToAdd = parsePMCPragma(pDecl);	
+				if (stmt->attributeExists("PMCAttribute")) {
+					PMCPragmaAttribute *p = dynamic_cast<PMCPragmaAttribute *> (stmt->getAttribute("PMCAttribute"));
+					*p += attributeToAdd;	
+					stmt->updateAttribute("PMCAttribute", p);
+				}
+				else {
+					PMCPragmaAttribute *pNewAttribute = new PMCPragmaAttribute();
+					*pNewAttribute += attributeToAdd;
+					stmt->addNewAttribute("PMCAttribute", pNewAttribute);
+				}
+
+				cout << "\tattribute " << attributeToAdd.toString() << " is added." << endl << endl;
+			}	// if pmc
+		}	// end for
+	}
+
+
+	PMCPragmaAttribute parsePMCPragma(SgPragmaDeclaration* pPragmaDecl)
+	{
+		PMCPragmaAttribute result;
+		ROSE_ASSERT(pPragmaDecl);
+		ROSE_ASSERT(pPragmaDecl->get_pragma());
+		string pragmaContent = pPragmaDecl->get_pragma()->get_pragma();
+
+		// Used boost tokenizer and string comparator instead of afs_match_substr
+		// to get more flexible handling of pragma content
+
+		// Set separator as '(', ')', ',', and white space.
+		// because pragmas can be given like '#pragma pmc shared   (a, b)'
+		char_separator<char> sep("(), ");
+		tokenizer< char_separator<char> > tok(pragmaContent, sep);
+		tokenizer< char_separator<char> >::iterator it;
+
+		it = tok.begin();
+		++it;		// skip pmc identifier
+		PMCPragmaEnum	pmcCmd;
+		if (boost::iequals(*it, "shared")) 
+			pmcCmd = PMC_SHARED;
+		else if (boost::iequals(*it, "first_sharing")) 
+			pmcCmd = PMC_FIRST_SHARING;
+		else if (boost::iequals(*it, "last_sharing")) 
+			pmcCmd = PMC_LAST_SHARING;
+		else if (boost::iequals(*it, "thread_local_live_in")) 
+			pmcCmd = PMC_THREAD_LOCAL_LIVE_IN;
+		else if (boost::iequals(*it, "thread_local_live_out")) 
+			pmcCmd = PMC_THREAD_LOCAL_LIVE_OUT;
+		else if (boost::iequals(*it, "write_dense"))
+			pmcCmd = PMC_WRITE_DENSE;
+		else if (boost::iequals(*it, "write_first")) 
+			pmcCmd = PMC_WRITE_FIRST;
+		else if (boost::iequals(*it, "write_once")) 
+			pmcCmd = PMC_WRITE_ONCE;
+		else 
+			pmcCmd = UNKNOWN;
+
+		// skip pmc command, and iterate remaining tokens
+		for (++it; it != tok.end(); ++it)
+		{
+			PMCPragmaAttribute temp(NULL, pmcCmd, *it);
+			result += temp;
+		}
+
+		return result;
+	}
+
+
+	NodeQuerySynthesizedAttributeType querySolver(SgNode *node)
+	{
+		NodeQuerySynthesizedAttributeType result;
+
+		if (node->attributeExists("PMCAttribute"))
+			result.push_back(node); 
+
+		return result;
+	}
+
+
+	void applyPMCAttributesToStatements(SgProject *proj)
+	{
+		Rose_STL_Container<SgNode *> nodeList = NodeQuery::querySubTree(proj, &querySolver);
+		Rose_STL_Container<SgNode *>::iterator it;
+
+		cout << "query" << endl;
+		for (it = nodeList.begin(); it != nodeList.end(); ++it)
+		{
+			cout << (*it)->unparseToString() << endl;
+		}
+
+		
+		cout << "propagate" << endl;
+		PropagateTraversal propagate;
+		for (it = nodeList.begin(); it != nodeList.end(); ++it)
+		{
+			propagate.traverse(*it, preorder);
+			cout << endl;
+		}
+
+
+	}
 
 }; // end of namespace

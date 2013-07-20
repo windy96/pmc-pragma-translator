@@ -1,94 +1,142 @@
 // Pragma Translator for Programmer Managed Cache
 // Written by Wooil Kim
-// Last updated at Jun 20, 2013
+// Last updated on Jul 19, 2013
 
 #ifndef PMC_SUPPORT_H
 #define PMC_SUPPORT_H
 
-#include <rose.h>
+#include "rose.h"
+#include <string>
 
 using namespace std;
+
 
 namespace PMCSupport
 {
 
 	enum PMCPragmaEnum {
-		NONE,
-    PMC_SHARED,
-    PMC_FIRST_SHARING,
-    PMC_LAST_SHARING,
-    PMC_DATAFLOW_IN,
-    PMC_DATAFLOW_OUT,
-    PMC_WRITE_DENSE,
-    PMC_WRITE_FIRST,
-    PMC_WRITE_ONCE,
-    PMC_NUM_PRAGMAS
-  };
+		NONE	= 0,
+	    PMC_SHARED,
+		PMC_FIRST_SHARING,
+		PMC_LAST_SHARING,
+		PMC_THREAD_LOCAL_LIVE_IN,
+		PMC_THREAD_LOCAL_LIVE_OUT,
+		PMC_WRITE_DENSE,
+	    PMC_WRITE_FIRST,
+		PMC_WRITE_ONCE,
+		UNKNOWN,
+	    PMC_NUM_PRAGMAS
+	};
+
+	extern string PMCPragmaEnumString[];
 
 
-
-struct PMCPragmaInfo
-{
-	PMCPragmaEnum	pmcCmd;
-	string			content;
-
-	PMCPragmaInfo(PMCPragmaEnum p, string s)
-		: pmcCmd(p), content(s) {}
-};
-
-class PMCPragmaAttribute: public AstAttribute
-{
-public:
-	SgNode* node;
-	vector<PMCPragmaInfo>	pragmaVec;
-
-	PMCPragmaAttribute(SgNode* n, PMCPragmaEnum pType, string con)
+	class PMCPragmaInfo
 	{
-		node = n;
-		pragmaVec.push_back(PMCPragmaInfo(pType, con));
+	public:
+		PMCPragmaEnum	pmcCmd;
+		string			content;
+
+		PMCPragmaInfo(PMCPragmaEnum p, string s)
+			: pmcCmd(p), content(s) {}
+
+		string toString();
+	};
+
+
+	class PMCPragmaAttribute: public AstAttribute
+	{
+	public:
+		SgNode *node;
+		vector<PMCPragmaInfo>	pragmaVec;
+
+		PMCPragmaAttribute()
+		{
+			node = NULL;
+		}
+
+		PMCPragmaAttribute(SgNode *n, PMCPragmaEnum pType, string con)
+		{
+			node = n;
+			pragmaVec.push_back(PMCPragmaInfo(pType, con));
+		}
+
+		virtual std::string toString();
+
+		// add pragma attribute to current attribute
+		PMCPragmaAttribute& operator+=(PMCPragmaAttribute &rhs);
+	};
+
+
+	class CheckerTraversal: public AstSimpleProcessing
+	{
+	protected:
+		virtual void visit(SgNode* n);
+		void parseTriplet(PMCPragmaAttribute* attr);
+	};
+
+	class PropagateTraversal: public AstSimpleProcessing
+	{
+	protected:
+		virtual void visit(SgNode* n);
+	};
+/*
+	class ParsingPMCTraversal: public AstPrePostProcessing
+	{
+	protected:
+		virtual void preOrderVisit(SgNode* n);
+		virtual void postOrderVisit(SgNode* n);
+
+	private:
+		vector<struct pragmaBBPair *> currentPMCPragmas;
+		vector<struct pragmaBBPair *>::iterator pairIt;	Rose_STL_Container<SgNode *> pragmaDeclarationList = NodeQuery::querySubTree(project, V_SgPragmaDeclaration);
+	Rose_STL_Container<SgNode *>::iterator pragmaIt;
+
+	for (pragmaIt = pragmaDeclarationList.begin(); pragmaIt != pragmaDeclarationList.end(); ++pragmaIt)
+	{
+		SgPragmaDeclaration *pDecl;
+		pDecl = isSgPragmaDeclaration(*pragmaIt);
+		string	key = extractPragmaKeyword(pDecl);
+		if ((key != "pmc") && (key != "PMC"))
+			continue;
+
+		string	content = pDecl->get_pragma()->get_pragma();
+		content = content.substr(4, content.size() - 4);
+		cout << "pragma is recognized: " << content << endl;
+
+		SgStatement *pragmaStmt = getEnclosingStatement(pDecl);
+		SgStatement *stmt;
+		stmt = getNextStatement(pragmaStmt);
+		ROSE_ASSERT(stmt);
+		while (isSgPragmaDeclaration(stmt)) {
+			stmt = getNextStatement(stmt);
+			ROSE_ASSERT(stmt);
+		}
+
+		cout << "    applied to: " << stmt->unparseToString() << endl;
+		PMCPragmaAttribute attributeToAdd = parsePMCPragma(pDecl);	
+		if (stmt->attributeExists("PMCAttribute")) {
+			PMCPragmaAttribute *p = dynamic_cast<PMCPragmaAttribute *> (stmt->getAttribute("PMCAttribute"));
+			*p += attributeToAdd;	
+			stmt->updateAttribute("PMCAttribute", p);
+		}
+		else {
+			PMCPragmaAttribute *pNewAttribute = new PMCPragmaAttribute();
+			*pNewAttribute += attributeToAdd;
+			stmt->addNewAttribute("PMCAttribute", pNewAttribute);
+		}
+
+		cout << "    attribute " << attributeToAdd.toString() << " is added." << endl << endl;
 	}
 
-	virtual std::string toString();
-};
 
-
-  struct pragmaBBPair {
-    PMCPragmaAttribute *pragma;
-    SgBasicBlock *pBB;
-
-    pragmaBBPair(PMCPragmaAttribute *p, SgBasicBlock *b) {
-      pragma = p;
-      pBB = b;
-    }
-  };
-
-  class ParsingTraversal: public AstSimpleProcessing
-  {
-    protected:
-      virtual void visit(SgNode* n);
-      void parseTriplet(PMCPragmaAttribute* attr);
-
-  };
-
-  class ParsingPMCTraversal: public AstPrePostProcessing
-  {
-    protected:
-      virtual void preOrderVisit(SgNode* n);
-      virtual void postOrderVisit(SgNode* n);
-
-    private:
-
-      vector<struct pragmaBBPair *> currentPMCPragmas;
-      vector<struct pragmaBBPair *>::iterator pairIt;
-      vector<PMCPragmaAttribute * > pendingPMCPragmas;
-      vector<PMCPragmaAttribute *>::iterator pendingIt;
-  };
-    
-	  
-		
-
-  PMCPragmaAttribute* parsePMCPragma(SgPragmaDeclaration* pPragmaDecl);
-
+		vector<PMCPragmaAttribute * > pendingPMCPragmas;
+		vector<PMCPragmaAttribute *>::iterator pendingIt;
+	};
+*/  
+	void convertPMCPragmasToAttributes(SgProject *proj);
+	PMCPragmaAttribute parsePMCPragma(SgPragmaDeclaration* pPragmaDecl);
+	void applyPMCAttributesToStatements(SgProject *proj);
 
 }  // end of namespace
 
