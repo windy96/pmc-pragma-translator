@@ -31,6 +31,9 @@ int main(int argc, char *argv[])
 	// Step 3.
 	applyPMCAttributesToStatements(project);
 
+	// Step 4. 
+	// assuming this is called with execution graph
+
 /*
   ParsingPMCTraversal pmcParser;
   pmcParser.traverseInputFiles(project);

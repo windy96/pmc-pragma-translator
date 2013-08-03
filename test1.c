@@ -1,4 +1,5 @@
 int global1, global2;
+#pragma pmc shared (globalArray)
 int globalArray[100];
 int *pGlobal;
 
@@ -13,6 +14,7 @@ int foo(int a, int b)
 }
 
 #pragma pmc shared a, b
+#pragma pmc readonly a, b
 int bar(int a, int b)
 {
 	int c;
@@ -41,9 +43,18 @@ int main()
 	//*pGlobal = 2;
 
 	int i;
-	#pragma pmc shared (globalArray)
+	#pragma pmc rwshared globalArray
 	for (i = 0; i < 50; i++)
 		globalArray[i] = i;
+
+	#pragma pmc readonly globalArray
+	for (i = 0; i < 50; i++)
+		local1 += globalArray[i];
+
+	#pragma pmc rwshared globalArray
+	for (i = 0; i < 50; i++)
+		globalArray[i]++;
+
 
 	{
 	global1 += foo(local1, local2);

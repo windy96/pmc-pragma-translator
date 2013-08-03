@@ -19,6 +19,11 @@ namespace PMCSupport
 	string PMCPragmaEnumString[] = {
 		"none",
 		"shared",
+		"private",
+		"readonly",
+		"rwshared",
+		"locked",
+		"atomic",
 		"first sharing",
 		"last sharing",
 		"thread local live in",
@@ -30,6 +35,7 @@ namespace PMCSupport
 		"out of bound"
 	};
 
+	vector<string> sharedVarVec; 
 
 	string PMCPragmaInfo::toString()
 	{
@@ -112,18 +118,150 @@ namespace PMCSupport
 			case V_SgForStatement:
 				st = getEnclosingStatement(node);
 				//cout << "enclosing: " << st->unparseToString() << endl;
-				nst = getNextStatement(st);
-				cout << "next: " << nst->unparseToString() << endl;
+				//nst = getNextStatement(st);
+				cout << "for: " << st->unparseToString() << endl;
 				break;
 
+			case V_SgVariableDeclaration:
+				st = getEnclosingStatement(node);
+				cout << "variable declaration: " << st->unparseToString() << endl;
+				break;
+			
 			default:
-				cout << "not identified" << endl;
+				cout << "not identified for " << node->class_name() << endl;
 				break;	
 
 			}
 		}
 
 	}
+
+	void CoherenceTrackingTraversal::visit(SgNode* node)
+	{
+
+		if (node->attributeExists("PMCAttribute")) {
+			PMCPragmaAttribute *p = dynamic_cast<PMCPragmaAttribute *> (node->getAttribute("PMCAttribute"));
+			vector<PMCPragmaInfo>::iterator	it;
+
+			cout << "Node '" << node->unparseToString() << "' has pmc attributes." << endl;
+			cout << node->class_name() << endl;
+			
+			SgStatement	*st, *nst;
+			SgFunctionDeclaration *func;
+			SgBasicBlock *func_body;
+			switch (node->variantT()) {
+			case V_SgFunctionDeclaration:
+				//st = getEnclosingStatement(node);
+				//cout << "enclosing: " << st->unparseToString() << endl;
+				//nst = getNextStatement(st);
+				//cout << "next: " << nst->unparseToString() << endl;
+				func = isSgFunctionDeclaration(node);
+				func_body = func->get_definition()->get_body();
+				cout << "func body: " << func_body->unparseToString() << endl;
+				break;
+
+			case V_SgForStatement:
+				st = getEnclosingStatement(node);
+				//cout << "enclosing: " << st->unparseToString() << endl;
+				//nst = getNextStatement(st);
+				cout << "for: " << st->unparseToString() << endl;
+				break;
+
+			case V_SgVariableDeclaration:
+				st = getEnclosingStatement(node);
+				cout << "variable declaration: " << st->unparseToString() << endl;
+			
+			default:
+				cout << "not identified for " << node->class_name() << endl;
+				break;	
+
+			}
+		}
+
+	}
+
+
+	void VarRefTraversal::visit(SgNode* node)
+	{
+		SgVarRefExp* refExp;
+		SgVariableSymbol *symbol;
+		SgVariableSymbol *symbol2;
+		SgName name;
+		SgFunctionDefinition* fd;
+		SgSymbol *sym;
+		SgStatement *st;
+		SgScopeStatement *sc;
+		SgGlobal *sglobal;
+		SgBasicBlock *bb;
+
+		switch (node->variantT()) {
+		case V_SgVarRefExp:
+			refExp = isSgVarRefExp(node);
+			symbol = refExp->get_symbol();
+			name = symbol->get_name();
+			cout << endl;
+			cout << "\tname = " << name.getString() << endl;
+			// get_name for SgVarRef returns 
+			//cout << "\tvar ref name = " << get_name(node) << endl;
+			sc = symbol->get_scope();
+			ROSE_ASSERT(sc);
+
+
+			bb = isSgBasicBlock(sc);
+			if (bb) {
+				cout << "scope's first statement = " << sc->firstStatement()->unparseToString() << endl;
+				cout << "scope's last statement = " << sc->lastStatement()->unparseToString() << endl;
+				cout << "scope name = " << symbol->get_scope()->get_qualified_name().getString() << endl;
+			}
+			fd = isSgFunctionDefinition(sc);
+			if (fd) {
+				cout << "scope's first statement = " << sc->firstStatement()->unparseToString() << endl;
+				cout << "scope's last statement = " << sc->lastStatement()->unparseToString() << endl;
+				cout << "scope name = " << symbol->get_scope()->get_qualified_name().getString() << endl;
+			}
+			sglobal = isSgGlobal(sc);
+			if (sglobal) {
+				cout << "global scope" << endl;
+			}
+
+			/*
+			symbol2 = lookupVariableSymbolInParentScopes(name, getScope(node));
+			if (symbol2 == NULL)
+				cout << "\tdoes not return symbol" << endl;
+			else
+				cout << "\tfound symbol in parent scopes:" << symbol2->get_name().getString() << endl;
+
+			cout << "local symbol table" << endl;	
+			outputLocalSymbolTables(node);
+
+			fd = getEnclosingFunctionDefinition(node);
+			cout << "\tin the function definition, " << "exists? " << fd->symbol_exists(name) << endl;
+			sym = fd->lookup_symbol(name);
+			cout << "\tin the function definition, " << "exists? " << (sym != NULL) << endl << endl;
+			symbol2 = fd->lookup_var_symbol(name);
+			st = getEnclosingStatement(node);
+			sc = isSgScopeStatement(st);
+			if (sc == NULL)
+				cout << "sc is null" << endl;
+			else {
+				symbol2 = sc->lookup_var_symbol(name);
+				if (symbol2 == NULL)
+					cout << "\tdoes not return symbol" << endl;
+				else
+					cout << "\tfound symbol in parent scopes:" << symbol2->get_name().getString() << endl;
+			}
+			*/	
+			
+			break;
+			
+		default:
+			break;	
+		}
+	}
+
+
+
+	
 
 
 /*
@@ -296,6 +434,18 @@ namespace PMCSupport
 					ROSE_ASSERT(stmt);
 				}
 
+				SgVariableDeclaration *varDecl = isSgVariableDeclaration(stmt);	
+				if (varDecl) {
+					Rose_STL_Container<SgInitializedName *> varList;
+					Rose_STL_Container<SgInitializedName *>::iterator varListIt;
+					varList = varDecl->get_variables();
+					for (varListIt = varList.begin(); varListIt != varList.end(); ++varListIt) {
+						string s = (*varListIt)->get_name().getString();	
+						sharedVarVec.push_back(s);
+						cout << "\t" << s << " is added to shared variable vector." << endl;
+					}
+				}
+
 				cout << "\tapplied to: " << stmt->unparseToString() << endl;
 				PMCPragmaAttribute attributeToAdd = parsePMCPragma(pDecl);	
 				if (stmt->attributeExists("PMCAttribute")) {
@@ -336,6 +486,16 @@ namespace PMCSupport
 		PMCPragmaEnum	pmcCmd;
 		if (boost::iequals(*it, "shared")) 
 			pmcCmd = PMC_SHARED;
+		else if (boost::iequals(*it, "private")) 
+			pmcCmd = PMC_PRIVATE;
+		else if (boost::iequals(*it, "readonly")) 
+			pmcCmd = PMC_READONLY;
+		else if (boost::iequals(*it, "rwshared")) 
+			pmcCmd = PMC_RWSHARED;
+		else if (boost::iequals(*it, "locked")) 
+			pmcCmd = PMC_LOCKED;
+		else if (boost::iequals(*it, "atomic")) 
+			pmcCmd = PMC_ATOMIC;
 		else if (boost::iequals(*it, "first_sharing")) 
 			pmcCmd = PMC_FIRST_SHARING;
 		else if (boost::iequals(*it, "last_sharing")) 
@@ -381,19 +541,24 @@ namespace PMCSupport
 		Rose_STL_Container<SgNode *>::iterator it;
 
 		cout << "query" << endl;
+		VarRefTraversal varref;
 		for (it = nodeList.begin(); it != nodeList.end(); ++it)
 		{
 			cout << (*it)->unparseToString() << endl;
+
+			varref.traverse(*it, preorder);
 		}
 
 		
-		cout << "propagate" << endl;
+		cout << endl << "propagate" << endl;
 		PropagateTraversal propagate;
 		for (it = nodeList.begin(); it != nodeList.end(); ++it)
 		{
 			propagate.traverse(*it, preorder);
 			cout << endl;
 		}
+
+		
 
 
 	}

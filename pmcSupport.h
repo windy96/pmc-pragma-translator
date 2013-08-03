@@ -1,6 +1,6 @@
 // Pragma Translator for Programmer Managed Cache
 // Written by Wooil Kim
-// Last updated on Jul 19, 2013
+// Last updated on Aug 2, 2013
 
 #ifndef PMC_SUPPORT_H
 #define PMC_SUPPORT_H
@@ -17,6 +17,11 @@ namespace PMCSupport
 	enum PMCPragmaEnum {
 		NONE	= 0,
 	    PMC_SHARED,
+		PMC_PRIVATE,
+		PMC_READONLY,
+		PMC_RWSHARED,
+		PMC_LOCKED,
+		PMC_ATOMIC,
 		PMC_FIRST_SHARING,
 		PMC_LAST_SHARING,
 		PMC_THREAD_LOCAL_LIVE_IN,
@@ -29,6 +34,9 @@ namespace PMCSupport
 	};
 
 	extern string PMCPragmaEnumString[];
+
+
+	extern vector<string>	sharedVarVec;
 
 
 	class PMCPragmaInfo
@@ -76,6 +84,19 @@ namespace PMCSupport
 	};
 
 	class PropagateTraversal: public AstSimpleProcessing
+	{
+	protected:
+		virtual void visit(SgNode* n);
+	};
+
+
+	class CoherenceTrackingTraversal: public AstSimpleProcessing
+	{
+	protected:
+		virtual void visit(SgNode* n);
+	};
+
+	class VarRefTraversal: public AstSimpleProcessing
 	{
 	protected:
 		virtual void visit(SgNode* n);
