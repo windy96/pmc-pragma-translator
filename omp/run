@@ -1,0 +1,16 @@
+#!/bin/csh -f
+#set APP=test1
+#set APP=jacobi
+#set APP=is_single
+set APP=mg_single
+
+rm *.dot
+rm *.pdf
+./myomp -c $APP.c -rose:openmp:ast_only
+
+foreach file (./*.dot)
+	echo $file
+	dot -Tpdf $file -o $file:r.pdf
+	evince $file:r.pdf &
+end
+
