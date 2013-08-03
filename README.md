@@ -13,5 +13,10 @@ This translator is based on ROSE compiler infrastructure.
 
 [Update History]
 Mar 6, committed the first draft version. The translator recognizes PMC pragmas.
+Aug 2, 
 
+
+[Copyright]
+All credit of research using this translator is on Wooil Kim.
+University of Illinois and Lawrence Livermore National Laboratory also have their rights on this program.
 
